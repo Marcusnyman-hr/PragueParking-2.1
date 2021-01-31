@@ -1,0 +1,38 @@
+{
+  "ParkingSpotsAmount": 100,
+  "ParkingSpotSize": 4,
+  "BicycleSize": 1,
+  "McSize": 2,
+  "CarSize": 4,
+  "BusSize": 16,
+  "BicyclePrice": 5,
+  "McPrice": 10,
+  "CarPrice": 20,
+  "BusPrice": 80,
+  "VehicleTypes": [
+    {
+      "Name": "Bicycle",
+      "identifier": "bicycle",
+      "size": 1,
+      "Price": 5
+    },
+    {
+      "Name": "MC",
+      "identifier": "mc",
+      "size": 2,
+      "Price": 10
+    },
+    {
+      "Name": "Car",
+      "identifier": "car",
+      "size": 1,
+      "Price": 20
+    },
+    {
+      "Name": "Bus",
+      "identifier": "bus",
+      "size": 16,
+      "Price": 80
+    }
+  ]
+}
