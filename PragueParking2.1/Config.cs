@@ -6,6 +6,10 @@ namespace PragueParking2._1
 {
     public class Config
     {
+        public Config()
+        {
+
+        }
         public Config(int parkingSpotsAmount, int parkingSpotSize, int bicycleSize, int mcSize, int carSize, int busSize, int bicyclePrice, int mcPrice, int carPrice, int busPrice, List<dynamic> vehicleTypes)
         {
             this.VehicleTypes = vehicleTypes;

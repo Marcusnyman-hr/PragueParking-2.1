@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using System.Data.SqlClient;
 using Dapper;
 using System.Threading;
+using System.Reflection;
 
 namespace PragueParking2._1
 {
@@ -67,11 +68,12 @@ namespace PragueParking2._1
                             "Park vehicle",
                             "Repark vehicle",
                             "Depark vehicle",
-                            "Reload configuration file",
                             "Show pricelist",
                             "Show list of occupied parkingspots",
                             "Show map",
                             "Generate vehicles",
+                            "Reload configuration file",
+                            "Show/edit configuration",
                             "Exit program"
                         }));
                 switch (menuOption)
@@ -105,6 +107,9 @@ namespace PragueParking2._1
                         break;
                     case "Generate vehicles":
                         GenerateVehicles();
+                        break;
+                    case "Show/edit configuration":
+                        ShowAndEditConfig();
                         break;
                     case "Exit program":
                         ExitProgram();
@@ -261,15 +266,16 @@ namespace PragueParking2._1
                 parseSuccess = int.TryParse(newParkingSpotString, out newParkingSpot);
                 if (parseSuccess)
                 {
-                    if(newParkingSpot > 50 || newParkingSpot > config.ParkingSpotsAmount)
-                    {
-                        Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
-                        AnsiConsole.MarkupLine("[red3]This parking spot is not available for a bus...[/]");
-                        Console.ReadKey();
-                        return;
-                    }
+
                     if(vehicle is Bus)
                     {
+                        if (newParkingSpot > 50 || newParkingSpot > config.ParkingSpotsAmount)
+                        {
+                            Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                            AnsiConsole.MarkupLine("[red3]This parking spot is not available for a bus...[/]");
+                            Console.ReadKey();
+                            return;
+                        }
                         int[] newParkingSpots = new int[config.BusSize / config.ParkingSpotSize];
                         newParkingSpots = FindFreeBusSpots(newParkingSpot);
                         if(newParkingSpots.Contains(-1))
@@ -510,32 +516,179 @@ namespace PragueParking2._1
             Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
             AnsiConsole.MarkupLine("Press [springgreen4]any key[/] to go back to the main menu..");
             Console.ReadKey();
-            //}
-            //else if (regInfoOrvehicleToken.Length == 7)
-            //{
-            //    foreach (ParkingSpot pspot in ParkingLot)
-            //    {
-            //        foreach (Vehicle vehicle in pspot.ListParkedVehicles())
-            //        {
-            //            if (vehicle.RegistrationNumber == regInfoOrvehicleToken)
-            //            {
-            //                float charge = pspot.deParkVehicleFromSpot(pspot.findIndexOfVehicle(regInfoOrvehicleToken), config);
-            //                Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
-            //                AnsiConsole.Markup($"Please charge the customer: [green]{charge}[/] CZK");
-            //                Console.ReadKey();
-            //                WriteToStorage();
-            //                return;
-            //            }
-            //        }
-            //    }
 
-            //}
+        }
+        //Show and edit config file
+        //Här har jag bråkat en hel del, hade önskat att hitta ett sätt att sätta värden utan att hårdkoda
+        //alternativen, men har inte hunnit hitta något bra sätt än!
+        public static void ShowAndEditConfig()
+        {
 
+            Config newConfig = LoadConfigFile();
+
+            var table = new Table();
+            table.Border = TableBorder.HeavyEdge;
+            table.Centered();
+            table.AddColumn(new TableColumn(new Markup("[bold yellow]Setting: [/]")));
+            table.AddColumn(new TableColumn(new Markup("[bold yellow]Value: [/]")));
+            int i = 0;
+            foreach (PropertyInfo prop in newConfig.GetType().GetProperties())
+            {
+                var propType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+                if (propType == typeof(int))
+                {
+                    string value = prop.GetValue(newConfig, null).ToString();
+                    table.AddRow($"[orchid]{i}. {prop.Name}[/]", $"[orchid]{value}[/]");
+                    i++;
+                }
+            }
+            Console.WriteLine();
+            Console.SetCursorPosition(Console.CursorLeft, (Console.WindowHeight - (i + 20)) / 2);
+            AnsiConsole.Render(table);
+            Console.WriteLine();
+            Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+            if (!AnsiConsole.Confirm("Do you want to change something?"))
+            {
+                return;
+            }
+            else
+            {
+
+                int validMenuOption;
+                bool optionParseSuccess;
+                Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                var menuOption = AnsiConsole.Ask<string>($"What setting do you want to change? 0 - {(i - 1)}");
+                optionParseSuccess = int.TryParse(menuOption, out validMenuOption);
+                if(!optionParseSuccess || validMenuOption > (i-1))
+                {
+                    Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                    AnsiConsole.MarkupLine("[red]Error: [/]Faulty menu selection.");
+                    Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                    AnsiConsole.MarkupLine("Press [springgreen4]any key[/] to go back to the main menu..");
+                    Console.ReadKey();
+                } else
+                {
+                    int validValue;
+                    bool valueParseSuccess;
+                    Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                    var newValue = AnsiConsole.Ask<string>($"What do you want to change it to?");
+                    valueParseSuccess = int.TryParse(newValue, out validValue);
+                    if (optionParseSuccess && validMenuOption <= i)
+                    {
+                        bool updateSuccess = false;
+                        switch (validMenuOption)
+                        {
+                            case 0:
+                                if(newConfig.ParkingSpotsAmount > validValue)
+                                {
+                                    int indexOfNewLastPspot = Program.config.ParkingSpotsAmount - (Program.config.ParkingSpotsAmount - validValue);
+                                    bool spotsAreEmpty = false;
+                                    for(int k = indexOfNewLastPspot; k < Program.config.ParkingSpotsAmount; k++)
+                                    {
+                                        if(ParkingLot[k].FreeSpace < Program.config.ParkingSpotSize)
+                                        {
+                                            Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                                            AnsiConsole.MarkupLine("[red]Error: [/]Some of these parking spots contain vehicles.");
+                                            Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                                            AnsiConsole.MarkupLine("Press [springgreen4]any key[/] to go back to the main menu..");
+                                            Console.ReadKey();
+                                            return;
+                                        } else
+                                        {
+                                            spotsAreEmpty = true;
+                                        }
+                                    }
+                                    if (spotsAreEmpty)
+                                    {
+                                        ParkingLot.RemoveRange(validValue, ParkingLot.Count - validValue);
+                                        newConfig.ParkingSpotsAmount = validValue;
+                                        updateSuccess = true;
+                                    }
+                                } else if (newConfig.ParkingSpotsAmount < validValue)
+                                {
+                                    int amount = validValue - newConfig.ParkingSpotsAmount;
+                                    for (int j = 0; j < amount; j++) 
+                                    {
+                                        ParkingLot.Add(new ParkingSpot(i, config.ParkingSpotSize));
+                                    }
+                                    newConfig.ParkingSpotsAmount = validValue;
+                                    updateSuccess = true;
+                                } else
+                                {
+                                    Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                                    AnsiConsole.MarkupLine($"[red]Error: [/]There is already {validValue} parkingspots.");
+                                    Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                                }
+
+                                break;
+                            case 1:
+                                newConfig.ParkingSpotSize = validValue;
+                                break;
+                            case 2:
+                                newConfig.BicycleSize = validValue;
+                                break;
+                            case 3:
+                                newConfig.McSize = validValue;
+                                break;
+                            case 4:
+                                newConfig.CarSize = validValue;
+                                break;
+                            case 5:
+                                newConfig.BusSize = validValue;
+                                break;
+                            case 6:
+                                newConfig.BicyclePrice = validValue;
+                                break;
+                            case 7:
+                                newConfig.McPrice = validValue;
+                                break;
+                            case 8:
+                                newConfig.CarPrice = validValue;
+                                break;
+                            case 9:
+                                newConfig.BusPrice = validValue;
+                                break;
+                            default:
+                                break;
+                        }
+                        if(updateSuccess)
+                        {
+                            Program.config = newConfig;
+                            string newConfigJsonData = JsonConvert.SerializeObject(Program.config);
+                            string storagePath = @"../../../config2.1.json";
+                            StreamWriter sw = new StreamWriter(storagePath);
+                            sw.Write(newConfigJsonData);
+                            sw.Close();
+                            Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                            AnsiConsole.MarkupLine("[springgreen4]Success: [/]Configuration  updated.");
+                            Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                            AnsiConsole.MarkupLine("Press [springgreen4]any key[/] to go back to the main menu..");
+                            Console.ReadKey();
+                        } else
+                        {
+                            Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                            AnsiConsole.MarkupLine($"[red]Error: [/]Something went wrong!");
+                            Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                            AnsiConsole.MarkupLine("Press [springgreen4]any key[/] to go back to the main menu..");
+                            Console.ReadKey();
+                        }
+
+                    }
+                    else
+                    {
+                        Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                        AnsiConsole.MarkupLine("[red]Error: [/]Faulty value or menu selection.");
+                        Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                        AnsiConsole.MarkupLine("Press [springgreen4]any key[/] to go back to the main menu..");
+                        Console.ReadKey();
+                    }
+                }
+        
+            }
         }
         //Load and deserialize the config file, create a new object of the class Configuration
         public static Config LoadConfigFile()
         {
-
             string storagePath = @"../../../config2.1.json";
             using (StreamReader reader = new StreamReader(storagePath))
             {
@@ -875,9 +1028,13 @@ namespace PragueParking2._1
             Console.WriteLine();
             for (int i = 0; i < parkingLot.Count; i = i + 4)
             {
-                int k = 3;
                 Console.SetCursorPosition((Console.WindowWidth - 108) / 2, Console.CursorTop);
-                for (int x = 0; x < 4; x++)
+                int remaining = 4;
+                if(i + 4 > parkingLot.Count)
+                {
+                    remaining = parkingLot.Count - i;
+                }
+                for (int x = 0; x < remaining; x++)
                 {
                     int tot = i + x;
                     string cellNmbr;
