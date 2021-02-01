@@ -26,6 +26,9 @@ namespace PragueParking2._1
         private const int MINIMIZE = 6;
         private const int RESTORE = 9;
 
+        //use sql or not?
+        public static bool useSql = true;
+
         //initiate parkinglot
         public static List<ParkingSpot> ParkingLot = new List<ParkingSpot>();
 
@@ -42,12 +45,30 @@ namespace PragueParking2._1
             {
                 ParkingLot.Add(new ParkingSpot(i, config.ParkingSpotSize));
             }
+            var dbChoice = AnsiConsole.Prompt(
+            new SelectionPrompt<string>()
+            .Title("What's your database do you want to use?")
+            .PageSize(10)
+                .AddChoices(new[] {
+                    "SQL-Database",
+                    "JSON-Database"
+                }));
+            //Load stored vehicles
 
-            //Load storagefile with stored vehicles
-            LoadVehicles(config);
+            if (dbChoice == "SQL-Database")
+            {
+                useSql = true;
+                CreateDb();
+                LoadVehicles(config);
+            }  else
+            {
+                useSql = false;
+                LoadVehicles(config);
+            }
+
 
             //Login
-            bool loggedIn = true;
+            bool loggedIn = false;
             while (!loggedIn)
             {
                 loggedIn = LogIn();
@@ -58,12 +79,12 @@ namespace PragueParking2._1
             while (menuIsActive)
             {
                 Console.Clear();
-                var appHeading = new Rule("PRAGUE PARKING 2.0");
+                var appHeading = new Rule("PRAGUE PARKING 2.1");
                 AnsiConsole.Render(appHeading);
                 var menuOption = AnsiConsole.Prompt(
                     new SelectionPrompt<string>()
                         .Title("What do you want to do?")
-                        .PageSize(10)
+                        .PageSize(12)
                         .AddChoices(new[] {
                             "Park vehicle",
                             "Repark vehicle",
@@ -106,7 +127,7 @@ namespace PragueParking2._1
                         renderParkingOverview(ParkingLot);
                         break;
                     case "Generate vehicles":
-                        GenerateVehicles();
+                        GenerateVehicles(10);
                         break;
                     case "Show/edit configuration":
                         ShowAndEditConfig();
@@ -114,12 +135,82 @@ namespace PragueParking2._1
                     case "Exit program":
                         ExitProgram();
                         break;
+                    case "load db":
+                        CreateDb();
+                        break;
                     default:
                         Console.WriteLine("Faulty choice");
                         Console.ReadLine();
                         break;
                 }
             }
+        }
+        public static void CreateDb()
+        {
+            //Check if db exists, if not, create it and generate some data.
+            var cs = @"Server=(localdb)\MSSQLLocalDB;Trusted_Connection=True;";
+            using var con = new SqlConnection(cs);
+            con.Open();
+            int databaseId = con.ExecuteScalar<int>("SELECT database_id FROM sys.databases WHERE Name = 'MarNymPragueParking2'");
+            if(databaseId != 0)
+            {
+                con.Close();
+                return;
+            }else
+            {
+                Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                AnsiConsole.MarkupLine("[springgreen3]Creating and populating database...[/]");
+                con.Execute("CREATE DATABASE MarNymPragueParking2");
+                con.Close();
+                Console.WriteLine("Created database");
+                var newCs = @"Server=(localdb)\MSSQLLocalDB;Database=MarNymPragueParking2;Trusted_Connection=True;";
+                using var newCon = new SqlConnection(newCs);
+                newCon.Execute("CREATE Table Bicycles (Owner nvarchar(50), Color nvarchar(50), ParkedAt int, ParkedSince DateTime, Token nvarchar(50))");
+                newCon.Execute("CREATE Table Mcs (RegistrationNumber nvarchar(50), Owner nvarchar(50), Brand nvarchar(50), Model nvarchar(50), ParkedAt int, ParkedSince DateTime, Token nvarchar(50))");
+                newCon.Execute("CREATE Table Cars (RegistrationNumber nvarchar(50), Owner nvarchar(50), Brand nvarchar(50), Model nvarchar(50), ParkedAt int, ParkedSince DateTime, Token nvarchar(50))");
+                newCon.Execute("CREATE Table Buses (RegistrationNumber nvarchar(50), ParkedAtSeveralString nvarchar(50), ParkedSince DateTime, Token nvarchar(50))");
+                Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
+                AnsiConsole.Markup("Generating some fake vehiclesm this will only happe [springgreen3]once...[/]");
+                GenerateVehicles(30);
+
+                Console.ReadKey();
+            }
+        }
+        public static List<Bicycle> GetBicyclesFromDb()
+        {
+            var cs = @"Server=(localdb)\MSSQLLocalDB;Database=PragueParking2.1;Trusted_Connection=True;";
+            using var con = new SqlConnection(cs);
+            con.Open();
+            var bicycles = con.Query<Bicycle>("SELECT * FROM Bicycles").ToList();
+            bicycles.ForEach(bicycle => Console.WriteLine(bicycle));
+            return bicycles;
+        }
+        public static List<Mc> GetMcsFromDb()
+        {
+            var cs = @"Server=(localdb)\MSSQLLocalDB;Database=PragueParking2.1;Trusted_Connection=True;";
+            using var con = new SqlConnection(cs);
+            con.Open();
+            var mcs = con.Query<Mc>("SELECT * FROM Mcs").ToList();
+            mcs.ForEach(mc => Console.WriteLine(mc));
+            return mcs;
+        }
+        public static List<Car> GetCarsFromDb()
+        {
+            var cs = @"Server=(localdb)\MSSQLLocalDB;Database=PragueParking2.1;Trusted_Connection=True;";
+            using var con = new SqlConnection(cs);
+            con.Open();
+            var cars = con.Query<Car>("SELECT * FROM Cars").ToList();
+            cars.ForEach(car => Console.WriteLine(car));
+            return cars;
+        }
+        public static List<Bus> GetBusesFromDb()
+        {
+            var cs = @"Server=(localdb)\MSSQLLocalDB;Database=PragueParking2.1;Trusted_Connection=True;";
+            using var con = new SqlConnection(cs);
+            con.Open();
+            var buses = con.Query<Bus>("SELECT * FROM Buses").ToList();
+            buses.ForEach(bus => Console.WriteLine(bus));
+            return buses;
         }
 
         public static void ExitProgram()
@@ -219,9 +310,10 @@ namespace PragueParking2._1
             Console.Clear();
             var loginHeading = new Rule("Please login - Prague Parking 2.0");
             AnsiConsole.Render(loginHeading);
-            string s = "Hello|World";
-            Console.SetCursorPosition((Console.WindowWidth - s.Length) / 2, Console.CursorTop);
-            Console.SetCursorPosition((Console.WindowWidth - 9) / 2, Console.WindowHeight / 2 - 2);
+            Console.SetCursorPosition((Console.WindowWidth - 30) / 2, Console.WindowHeight / 2 - 2);
+           AnsiConsole.MarkupLine("Pssst.. It's [green]admin / password[/] Classe!..");
+            Console.WriteLine();
+            Console.SetCursorPosition((Console.WindowWidth - 9) / 2, Console.CursorTop);
             string username = AnsiConsole.Ask<string>("[green]Username[/]: ");
             Console.SetCursorPosition((Console.WindowWidth - 9) / 2, Console.CursorTop);
             var password = AnsiConsole.Prompt(
@@ -291,6 +383,26 @@ namespace PragueParking2._1
                             }
                             vehicle.ParkedAtSeveral = newParkingSpots;
                             ParkBus((Bus)vehicle, newParkingSpots, config);
+                            if (useSql == true)
+                            {
+                                string newParkedAtSeveral = "";
+                                for (int k = 0; k < newParkingSpots.Length; k++)
+                                {
+                                    if (k == newParkingSpots.Length - 1)
+                                    {
+                                        newParkedAtSeveral = $"{newParkedAtSeveral}{newParkingSpots[k]}";
+                                    }
+                                    else
+                                    {
+                                        newParkedAtSeveral = $"{newParkedAtSeveral}{newParkingSpots[k]},";
+                                    }
+                                }
+                                var cs = @"Server=(localdb)\MSSQLLocalDB;Database=MarNymPragueParking2;Trusted_Connection=True;";
+                                using var con = new SqlConnection(cs);
+                                con.Open();
+                                con.Execute($"UPDATE Buses SET ParkedAtSeveralString = '{newParkedAtSeveral}' WHERE Token = '{vehicle.Token}' OR RegistrationNumber = '{vehicle.RegistrationNumber}'");
+                                con.Close();
+                            }
                             Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
                             AnsiConsole.MarkupLine($"Successfully reparked [green]{vehicle.RegistrationNumber}[/]");
                             WriteToStorage();
@@ -300,7 +412,8 @@ namespace PragueParking2._1
 
                     } else
                     {
-                        int vehicleSize = ParkingLot[newParkingSpot].getVehicleSize(vehicle);
+
+                            int vehicleSize = ParkingLot[newParkingSpot].getVehicleSize(vehicle);
                         bool availableSpace = ParkingLot[newParkingSpot].checkForFreeSpace(vehicleSize);
                         if (availableSpace)
                         {
@@ -308,15 +421,40 @@ namespace PragueParking2._1
                             vehicle.ParkedAt = newParkingSpot;
                             if (vehicle is Bicycle)
                             {
-                                ParkBicycle((Bicycle)vehicle, newParkingSpot, config);
+                            ParkBicycle((Bicycle)vehicle, newParkingSpot, config);
+                                if (useSql == true)
+                                {
+                                    var cs = @"Server=(localdb)\MSSQLLocalDB;Database=MarNymPragueParking2;Trusted_Connection=True;";
+                                    using var con = new SqlConnection(cs);
+                                    con.Open();
+                                    con.Execute($"UPDATE Bicycles SET ParkedAt = {newParkingSpot} WHERE Token = '{vehicle.Token}'");
+                                    con.Close();
+                                }
+
                             }
                             if (vehicle is Mc)
                             {
-                                ParkMc((Mc)vehicle, newParkingSpot, config);
+                                if (useSql == true)
+                                {
+                                    var cs = @"Server=(localdb)\MSSQLLocalDB;Database=MarNymPragueParking2;Trusted_Connection=True;";
+                                    using var con = new SqlConnection(cs);
+                                    ParkMc((Mc)vehicle, newParkingSpot, config);
+                                    con.Open();
+                                    con.Execute($"UPDATE Mcs SET ParkedAt = {newParkingSpot} WHERE Token = '{vehicle.Token}' OR RegistrationNumber = '{vehicle.RegistrationNumber}'");
+                                    con.Close();
+                                }
                             }
                             if (vehicle is Car)
                             {
-                                ParkCar((Car)vehicle, newParkingSpot, config);
+                                if (useSql == true)
+                                {
+                                    var cs = @"Server=(localdb)\MSSQLLocalDB;Database=MarNymPragueParking2;Trusted_Connection=True;";
+                                    using var con = new SqlConnection(cs);
+                                    ParkCar((Car)vehicle, newParkingSpot, config);
+                                    con.Open();
+                                    con.Execute($"UPDATE Cars SET ParkedAt = {newParkingSpot} WHERE Token = '{vehicle.Token}' OR RegistrationNumber = '{vehicle.RegistrationNumber}'");
+                                    con.Close();
+                                }
                             }
                             Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
                             AnsiConsole.Markup($"Successfully reparked the vehicle on parkingspot: [underline springgreen3]{newParkingSpot}[/]");
@@ -382,76 +520,133 @@ namespace PragueParking2._1
         //Load the stored vehicles from storagefile
         public static void LoadVehicles(Config config)
         {
-            string storagePath = @"../../../storedvehicles2.1.json";
-            using (StreamReader reader = new StreamReader(storagePath))
+            if(!useSql)
             {
-                //read file and deserialize the data
-                string json = reader.ReadToEnd();
-                if (json.Length > 1)
+                string storagePath = @"../../../storedvehicles2.1.json";
+                using (StreamReader reader = new StreamReader(storagePath))
                 {
-                    dynamic dynJson = JsonConvert.DeserializeObject(json);
-                    //Populate the parkinglot-list accordingly
-                    for (int i = 0; i < dynJson.Count; i++)
+                    //read file and deserialize the data
+                    string json = reader.ReadToEnd();
+                    if (json.Length > 1)
                     {
-                        if (dynJson[i].ParkedVehiclesOnSpot.Count > 0)
+                        dynamic dynJson = JsonConvert.DeserializeObject(json);
+                        //Populate the parkinglot-list accordingly
+                        for (int i = 0; i < dynJson.Count; i++)
                         {
-                            foreach (var vehicle in dynJson[i].ParkedVehiclesOnSpot)
+                            if (dynJson[i].ParkedVehiclesOnSpot.Count > 0)
                             {
-                                if (vehicle.identifier == "bicycle")
+                                foreach (var vehicle in dynJson[i].ParkedVehiclesOnSpot)
                                 {
-                                    string owner = vehicle.Owner;
-                                    string color = vehicle.Color;
-                                    int parkedAt = vehicle.ParkedAt;
-                                    DateTime parkedSince = vehicle.ParkedSince;
-                                    string token = vehicle.Token;
-                                    ParkBicycle(new Bicycle(owner, color, parkedAt, parkedSince, token), parkedAt, config);
-                                }
-                                if (vehicle.identifier == "mc")
-                                {
-                                    string brand = vehicle.Brand;
-                                    string model = vehicle.Model;
-                                    string registrationNumber = vehicle.RegistrationNumber;
-                                    string owner = vehicle.Owner;
-                                    int parkedAt = vehicle.ParkedAt;
-                                    DateTime parkedSince = vehicle.ParkedSince;
-                                    string token = vehicle.Token;
-                                    ParkMc(new Mc(registrationNumber, owner, brand, model, parkedAt, parkedSince, token), parkedAt, config);
-                                }
-                                if (vehicle.identifier == "car")
-                                {
-                                    string brand = vehicle.Brand;
-                                    string model = vehicle.Model;
-                                    string registrationNumber = vehicle.RegistrationNumber;
-                                    string owner = vehicle.Owner;
-                                    int parkedAt = vehicle.ParkedAt;
-                                    DateTime parkedSince = vehicle.ParkedSince;
-                                    string token = vehicle.Token;
-                                    ParkCar(new Car(registrationNumber, owner, brand, model, parkedAt, parkedSince, token), parkedAt, config);
-                                }
-                                if (vehicle.identifier == "bus")
-                                {
-                                    string registrationNumber = vehicle.RegistrationNumber;
-                                    int[] parkedAtSeveral = new int[vehicle.ParkedAtSeveral.Count];
-                                    for (int k = 0; k < vehicle.ParkedAtSeveral.Count; k++)
+                                    if (vehicle.identifier == "bicycle")
                                     {
-                                        parkedAtSeveral[k] = vehicle.ParkedAtSeveral[k];
+                                        string owner = vehicle.Owner;
+                                        string color = vehicle.Color;
+                                        int parkedAt = vehicle.ParkedAt;
+                                        DateTime parkedSince = vehicle.ParkedSince;
+                                        string token = vehicle.Token;
+                                        ParkBicycle(new Bicycle(owner, color, parkedAt, parkedSince, token), parkedAt, config);
                                     }
-                                    DateTime parkedSince = vehicle.ParkedSince;
-                                    string token = vehicle.Token;
-                                    ParkBus(new Bus(registrationNumber, parkedAtSeveral, parkedSince, token), parkedAtSeveral, config);
+                                    if (vehicle.identifier == "mc")
+                                    {
+                                        string brand = vehicle.Brand;
+                                        string model = vehicle.Model;
+                                        string registrationNumber = vehicle.RegistrationNumber;
+                                        string owner = vehicle.Owner;
+                                        int parkedAt = vehicle.ParkedAt;
+                                        DateTime parkedSince = vehicle.ParkedSince;
+                                        string token = vehicle.Token;
+                                        ParkMc(new Mc(registrationNumber, owner, brand, model, parkedAt, parkedSince, token), parkedAt, config);
+                                    }
+                                    if (vehicle.identifier == "car")
+                                    {
+                                        string brand = vehicle.Brand;
+                                        string model = vehicle.Model;
+                                        string registrationNumber = vehicle.RegistrationNumber;
+                                        string owner = vehicle.Owner;
+                                        int parkedAt = vehicle.ParkedAt;
+                                        DateTime parkedSince = vehicle.ParkedSince;
+                                        string token = vehicle.Token;
+                                        ParkCar(new Car(registrationNumber, owner, brand, model, parkedAt, parkedSince, token), parkedAt, config);
+                                    }
+                                    if (vehicle.identifier == "bus")
+                                    {
+                                        string registrationNumber = vehicle.RegistrationNumber;
+                                        int[] parkedAtSeveral = new int[vehicle.ParkedAtSeveral.Count];
+                                        for (int k = 0; k < vehicle.ParkedAtSeveral.Count; k++)
+                                        {
+                                            parkedAtSeveral[k] = vehicle.ParkedAtSeveral[k];
+                                        }
+                                        DateTime parkedSince = vehicle.ParkedSince;
+                                        string token = vehicle.Token;
+                                        ParkBus(new Bus(registrationNumber, parkedAtSeveral, parkedSince, token), parkedAtSeveral, config);
+                                    }
                                 }
                             }
                         }
+                        Console.WriteLine("Storage loaded...");
                     }
-                    Console.WriteLine("Storage loaded...");
+                    else
+                    {
+                        Console.WriteLine("No/invalid storagefile");
+                    }
                 }
-                else
+            }else
+            {
+                var cs = @"Server=(localdb)\MSSQLLocalDB;Database=MarNymPragueParking2;Trusted_Connection=True;";
+                using var con = new SqlConnection(cs);
+                var bicycles = con.Query<Bicycle>("SELECT * FROM Bicycles").ToList();
+                var mcs = con.Query<Mc>("SELECT * FROM Mcs").ToList();
+                var cars = con.Query<Car>("SELECT * FROM Cars").ToList();
+                var buses = con.Query<Bus>("SELECT * FROM Buses").ToList();
+                foreach (Bicycle bicycle in bicycles)
                 {
-                    Console.WriteLine("No/invalid storagefile");
+                    string owner = bicycle.Owner;
+                    string color = bicycle.Color;
+                    int parkedAt = bicycle.ParkedAt;
+                    DateTime parkedSince = bicycle.ParkedSince;
+                    string token = bicycle.Token;
+                    ParkBicycle(new Bicycle(owner, color, parkedAt, parkedSince, token), parkedAt, config);
                 }
+
+                foreach (Mc mc in mcs)
+                {
+                    string brand = mc.Brand;
+                    string model = mc.Model;
+                    string registrationNumber = mc.RegistrationNumber;
+                    string owner = mc.Owner;
+                    int parkedAt = mc.ParkedAt;
+                    DateTime parkedSince = mc.ParkedSince;
+                    string token = mc.Token;
+                    ParkMc(new Mc(registrationNumber, owner, brand, model, parkedAt, parkedSince, token), parkedAt, config);
+                }
+
+                foreach (Car car in cars)
+                {
+                    string brand = car.Brand;
+                    string model = car.Model;
+                    string registrationNumber = car.RegistrationNumber;
+                    string owner = car.Owner;
+                    int parkedAt = car.ParkedAt;
+                    DateTime parkedSince = car.ParkedSince;
+                    string token = car.Token;
+                    ParkCar(new Car(registrationNumber, owner, brand, model, parkedAt, parkedSince, token), parkedAt, config);
+                }
+
+                foreach (Bus bus in buses)
+                {
+                    string registrationNumber = bus.RegistrationNumber;
+                    int parkedAt = bus.ParkedAt;
+                    DateTime parkedSince = bus.ParkedSince;
+                    int[] parkedAtSeveral = bus.ParkedAtSeveral;
+                    string token = bus.Token;
+                    ParkBus(new Bus(registrationNumber, parkedAtSeveral, parkedSince, token), parkedAtSeveral, config);
+                }
+
             }
+            
 
         }
+
         //Find a vehicle
         public static int[] FindVehicle(string input)
         {
@@ -478,13 +673,12 @@ namespace PragueParking2._1
         {
             Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.WindowHeight / 2 - 2);
             var regInfoOrvehicleToken = AnsiConsole.Ask<string>("What's the vehicle [green]registration number or token?[/]");
-            //if (regInfoOrvehicleToken.Length == 10)
-            //{
+
                 foreach (ParkingSpot pspot in ParkingLot)
                 {
                 foreach (Vehicle vehicle in pspot.ListParkedVehicles())
                 {
-                    if (vehicle.Token == regInfoOrvehicleToken | vehicle.RegistrationNumber == regInfoOrvehicleToken)
+                    if (vehicle.Token == regInfoOrvehicleToken || vehicle.RegistrationNumber == regInfoOrvehicleToken)
                     {
                         float charge;
                         if (vehicle is Bus)
@@ -494,11 +688,30 @@ namespace PragueParking2._1
                             {
                                 ParkingLot[vehicle.ParkedAtSeveral[i]].deParkVehicleFromSpot(0, config);
                             }
+                            if (useSql == true)
+                            {
+                                var cs = @"Server=(localdb)\MSSQLLocalDB;Database=MarNymPragueParking2;Trusted_Connection=True;";
+                                using var con = new SqlConnection(cs);
+                                con.Open();
+                                con.Execute($"DELETE * FROM Buses WHERE RegistrationNumber = '{regInfoOrvehicleToken}' OR Token = '{regInfoOrvehicleToken}'");
+                                con.Close();
+                            }
+
 
                         }
                         else
                         {
                             charge = pspot.deParkVehicleFromSpot(pspot.findIndexOfVehicle(regInfoOrvehicleToken), config);
+                            if (useSql == true)
+                            {
+                                var cs = @"Server=(localdb)\MSSQLLocalDB;Database=MarNymPragueParking2;Trusted_Connection=True;";
+                                using var con = new SqlConnection(cs);
+                                con.Open();
+                                con.Execute($"DELETE FROM Bicycles WHERE Token = '{regInfoOrvehicleToken}'");
+                                con.Execute($"DELETE FROM Mcs WHERE RegistrationNumber = '{regInfoOrvehicleToken}' OR Token = '{regInfoOrvehicleToken}'");
+                                con.Execute($"DELETE FROM Cars WHERE RegistrationNumber = '{regInfoOrvehicleToken}' OR Token = '{regInfoOrvehicleToken}'");
+                                con.Close();
+                            }
                         }
                         Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
                         AnsiConsole.Markup($"Please charge the customer: [green]{charge}[/] CZK");
@@ -726,6 +939,14 @@ namespace PragueParking2._1
                 .AllowEmpty());
                 int bikeSpot = findFreeSpot("bicycle", config);
                 string token = ParkBicycle(new Bicycle(bikeOwner, bikeColor, bikeSpot, DateTime.Now), bikeSpot, config);
+                if (useSql == true)
+                {
+                    var cs = @"Server=(localdb)\MSSQLLocalDB;Database=MarNymPragueParking2;Trusted_Connection=True;";
+                    using var con = new SqlConnection(cs);
+                    con.Open();
+                    con.Execute($"INSERT INTO Bicycles VALUES('{bikeOwner}', '{bikeColor}', {bikeSpot}, '{DateTime.Now}', '{token}')");
+                    con.Close();
+                }
                 Console.WriteLine();
                 Console.SetCursorPosition((Console.WindowWidth - 40) / 2, Console.CursorTop);
                 Console.WriteLine($"Successfully parked the bicycle at: {bikeSpot}");
@@ -758,7 +979,30 @@ namespace PragueParking2._1
                 {
                     Bus bus = new Bus(registrationNumber, freeSpots, DateTime.Now);
                     string busToken =  ParkBus(bus, freeSpots, config);
-                    WriteToStorage();
+                    if(!useSql)
+                    {
+                        WriteToStorage();
+                    }
+                    if (useSql == true)
+                    {
+                        string newParkedAtSeveral = "";
+                        for (int k = 0; k < freeSpots.Length; k++)
+                        {
+                            if (k == freeSpots.Length - 1)
+                            {
+                                newParkedAtSeveral = $"{newParkedAtSeveral}{freeSpots[k]}";
+                            }
+                            else
+                            {
+                                newParkedAtSeveral = $"{newParkedAtSeveral}{freeSpots[k]},";
+                            }
+                        }
+                        var cs = @"Server=(localdb)\MSSQLLocalDB;Database=MarNymPragueParking2;Trusted_Connection=True;";
+                        using var con = new SqlConnection(cs);
+                        con.Open();
+                        con.Execute($"INSERT INTO Buses VALUES('{registrationNumber}', '{newParkedAtSeveral}', '{DateTime.Now}', '{busToken}')");
+                        con.Close();
+                    }
                     Console.SetCursorPosition((Console.WindowWidth - 40) / 2, Console.CursorTop);
                     AnsiConsole.Markup($"[springgreen3]Successfully[/] parked the bus at parking spots:");
                     for(int i = 0; i < freeSpots.Length; i++)
@@ -810,7 +1054,14 @@ namespace PragueParking2._1
                     case "Mc":
                         int mcSpot = findFreeSpot("mc", config);
                         string mcToken = ParkMc(new Mc(registrationNumber, owner, brand, model, mcSpot, DateTime.Now), mcSpot, config);
-
+                        if (useSql == true)
+                        {
+                            var cs = @"Server=(localdb)\MSSQLLocalDB;Database=MarNymPragueParking2;Trusted_Connection=True;";
+                            using var con = new SqlConnection(cs);
+                            con.Open();
+                            con.Execute($"INSERT INTO Mcs VALUES('{registrationNumber}', '{owner}', '{brand}', '{model}', {mcSpot}, '{DateTime.Now}', '{mcToken}')");
+                            con.Close();
+                        }
                         Console.SetCursorPosition((Console.WindowWidth - 40) / 2, Console.CursorTop);
                         Console.WriteLine($"Successfully parked the mc at parking spot: {mcSpot}");
                         Console.SetCursorPosition((Console.WindowWidth - 40) / 2, Console.CursorTop);
@@ -820,6 +1071,14 @@ namespace PragueParking2._1
                     case "Car":
                         int carSpot = findFreeSpot("car", config);
                         string carToken = ParkCar(new Car(registrationNumber, owner, brand, model, carSpot, DateTime.Now), carSpot, config);
+                        if (useSql == true)
+                        {
+                            var cs = @"Server=(localdb)\MSSQLLocalDB;Database=MarNymPragueParking2;Trusted_Connection=True;";
+                            using var con = new SqlConnection(cs);
+                            con.Open();
+                            con.Execute($"INSERT INTO Cars VALUES('{registrationNumber}', '{owner}', '{brand}', '{model}', {carSpot}, '{DateTime.Now}', '{carToken}')");
+                            con.Close();
+                        }
                         Console.SetCursorPosition((Console.WindowWidth - 40) / 2, Console.CursorTop);
                         Console.WriteLine($"Successfully parked the mc at parking spot: {carSpot}");
                         Console.SetCursorPosition((Console.WindowWidth - 40) / 2, Console.CursorTop);
@@ -1132,8 +1391,8 @@ namespace PragueParking2._1
             AnsiConsole.MarkupLine("Press [springgreen4]any key[/] to go back to the main menu..");
             Console.ReadKey();
         }
-        //Simple script to generate 10 random vehicles
-        public static void GenerateVehicles()
+        //Simple script to generate random vehicles
+        public static void GenerateVehicles(int amount)
         {
             var config = Program.config;
             string characters = "ABCDEFGHIJKLMNOPQRSTUVXYZ";
@@ -1144,7 +1403,7 @@ namespace PragueParking2._1
             string[] mcBrands = { "Yamaha", "Suzuki", "Kawasaki", "Baotian", "Hinseng", "Aprilia", "Peugot", "Jawa", "Honda" };
 
             Random random = new Random();
-            for (int i = 0; i < 10; i++)
+            for (int i = 0; i < amount; i++)
             {
                 if (i == 0)
                 {
@@ -1162,6 +1421,14 @@ namespace PragueParking2._1
                     string color = $"{colors[random.Next(colors.Length)]}";
                     int freeSpot = findFreeSpot("bicycle", config);
                     string token = ParkBicycle(new Bicycle(owner, color, freeSpot, DateTime.Now), freeSpot, config);
+                    if (useSql == true)
+                    {
+                        var cs = @"Server=(localdb)\MSSQLLocalDB;Database=MarNymPragueParking2;Trusted_Connection=True;";
+                        using var con = new SqlConnection(cs);
+                        con.Open();
+                        con.Execute($"INSERT INTO Bicycles VALUES('{owner}', '{color}', {freeSpot}, '{DateTime.Now}', '{token}')");
+                        con.Close();
+                    }
                     Console.WriteLine($"Bike with token: {token} generated.");
                 }
                 else if (randomVehicleType == 2)
@@ -1170,7 +1437,15 @@ namespace PragueParking2._1
                     string brand = $"{mcBrands[random.Next(mcBrands.Length)]}";
                     string registrationNumber = $"{characters[random.Next(characters.Length)].ToString()}{characters[random.Next(characters.Length)].ToString()}{characters[random.Next(characters.Length)].ToString()}{characters[random.Next(characters.Length)].ToString()}{random.Next(100, 999)}";
                     int freeSpot = findFreeSpot("mc", config);
-                    ParkMc(new Mc(registrationNumber, owner, brand, " ", freeSpot, DateTime.Now), freeSpot, config);
+                    string token = ParkMc(new Mc(registrationNumber, owner, brand, " ", freeSpot, DateTime.Now), freeSpot, config);
+                    if (useSql == true)
+                    {
+                        var cs = @"Server=(localdb)\MSSQLLocalDB;Database=MarNymPragueParking2;Trusted_Connection=True;";
+                        using var con = new SqlConnection(cs);
+                        con.Open();
+                        con.Execute($"INSERT INTO Mcs VALUES('{registrationNumber}', '{owner}', '', '', {freeSpot}, '{DateTime.Now}', '{token}')");
+                        con.Close();
+                    }
                     Console.WriteLine($"Mc with registration number: {registrationNumber} generated.");
                 }
                 else
@@ -1179,10 +1454,18 @@ namespace PragueParking2._1
                     string brand = $"{carBrands[random.Next(carBrands.Length)]}";
                     string registrationNumber = $"{characters[random.Next(characters.Length)].ToString()}{characters[random.Next(characters.Length)].ToString()}{characters[random.Next(characters.Length)].ToString()}{characters[random.Next(characters.Length)].ToString()}{random.Next(100, 999)}";
                     int freeSpot = findFreeSpot("car", config);
-                    ParkCar(new Car(registrationNumber, owner, brand, " ", freeSpot, DateTime.Now), freeSpot, config);
+                    string token = ParkCar(new Car(registrationNumber, owner, brand, " ", freeSpot, DateTime.Now), freeSpot, config);
+                    if (useSql == true)
+                    {
+                        var cs = @"Server=(localdb)\MSSQLLocalDB;Database=MarNymPragueParking2;Trusted_Connection=True;";
+                        using var con = new SqlConnection(cs);
+                        con.Open();
+                        con.Execute($"INSERT INTO Cars VALUES('{registrationNumber}', '{owner}', '', '', {freeSpot}, '{DateTime.Now}', '{token}')");
+                        con.Close();
+                    }
                     Console.WriteLine($"Car with registration number: {registrationNumber} generated.");
                 }
-                Thread.Sleep(500);
+                Thread.Sleep(200);
             }
             Console.WriteLine();
             Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);

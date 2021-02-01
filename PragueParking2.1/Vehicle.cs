@@ -41,6 +41,13 @@ namespace PragueParking2._1
             this.ParkedSince = parkedSince;
             this.Token = token;
         }
+        public Vehicle(string registrationNumber, string parkedAtSeveralString, DateTime parkedSince, string token)
+        {
+            this.RegistrationNumber = registrationNumber;
+            this.ParkedAtSeveral = makeParkedAtSeveralArr(parkedAtSeveralString);
+            this.ParkedSince = parkedSince;
+            this.Token = token;
+        }
         public Vehicle(string owner, int parkedAt, DateTime parkedSince, string token)
         {
             this.Owner = owner;
@@ -71,11 +78,16 @@ namespace PragueParking2._1
             var newToken = new String(Enumerable.Repeat(availableCharacters, 10).Select(s => s[random.Next(s.Length)]).ToArray());
             return newToken;
         }
-
+        public int[] makeParkedAtSeveralArr(string parkedAtSeveral)
+        {
+            var splitted = parkedAtSeveral.Split(",").Select(Int32.Parse).ToArray();
+            return splitted;
+        }
         public string RegistrationNumber { get; set; }
         public string Owner { get; set; }
         public int ParkedAt { get; set; }
         public int[] ParkedAtSeveral { get; set; }
+        public string ParkedAtSeveralString { get; set; }
         public DateTime ParkedSince { get; set; }
         public string Token { get; }
 
