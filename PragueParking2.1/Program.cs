@@ -171,7 +171,23 @@ namespace PragueParking2._1
                 newCon.Execute("CREATE Table Buses (RegistrationNumber nvarchar(50), ParkedAtSeveralString nvarchar(50), ParkedSince DateTime, Token nvarchar(50))");
                 Console.SetCursorPosition((Console.WindowWidth - 42) / 2, Console.CursorTop);
                 AnsiConsole.Markup("Generating some fake vehiclesm this will only happe [springgreen3]once...[/]");
-                GenerateVehicles(30);
+                int[] freeSpots = FindFreeBusSpots();
+                Bus bus = new Bus("ASDF123", freeSpots, DateTime.Now);
+                string busToken = ParkBus(bus, freeSpots, config);
+                string newParkedAtSeveral = "";
+                for (int k = 0; k < freeSpots.Length; k++)
+                {
+                    if (k == freeSpots.Length - 1)
+                    {
+                        newParkedAtSeveral = $"{newParkedAtSeveral}{freeSpots[k]}";
+                    }
+                    else
+                    {
+                        newParkedAtSeveral = $"{newParkedAtSeveral}{freeSpots[k]},";
+                    }
+                }
+                newCon.Execute($"INSERT INTO Buses VALUES('ASDF123', '{newParkedAtSeveral}', '{DateTime.Now}', '{busToken}')");
+            GenerateVehicles(30);
 
                 Console.ReadKey();
             }
